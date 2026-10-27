@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Radzen;
 
 namespace demoUI.Models;
 
@@ -42,6 +43,8 @@ public class CourseDto
     public string Title { get; set; } = "";
     public int Credits { get; set; }
     public bool IsActive { get; set; }
+
+    public string Label => $"{Code} - {Title}";
 }
 
 public class EnrollmentDto
@@ -160,26 +163,4 @@ public class AssessmentFormModel
 
     [Range(0.01, 100, ErrorMessage = "Weightage must be between 0.01 and 100.")]
     public decimal Weightage { get; set; }
-}
-
-// ------------------------------------------------------------------
-// Small UI helpers shared by the pages
-// ------------------------------------------------------------------
-public static class UiHelpers
-{
-    public static string StatusBadge(EnrollmentStatus status) => status switch
-    {
-        EnrollmentStatus.Active => "bg-success",
-        EnrollmentStatus.Completed => "bg-primary",
-        _ => "bg-secondary"
-    };
-
-    public static string GradeBadge(string grade) => grade switch
-    {
-        "A+" or "A" => "bg-success",
-        "B" or "C" => "bg-info text-dark",
-        "D" => "bg-warning text-dark",
-        "F" => "bg-danger",
-        _ => "bg-secondary"
-    };
 }

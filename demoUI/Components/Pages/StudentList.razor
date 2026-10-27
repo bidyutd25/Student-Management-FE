@@ -1,179 +1,148 @@
 @page "/students"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
 @inject EducationApi Api
 @inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notifications
 @inject IJSRuntime JS
+
 
 <PageTitle>Students</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Students</h3>
-    <a class="btn btn-primary" href="students/new">Add student</a>
-</div>
+<RadzenStack Orientation="Orientation.Horizontal"
+             JustifyContent="JustifyContent.SpaceBetween"
+             AlignItems="AlignItems.Center"
+             class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">Students</RadzenText>
+    <RadzenButton Text="Add student"
+                  Icon="add_circle"
+                  ButtonStyle="ButtonStyle.Primary"
+                  Click="@(() => Nav.NavigateTo("students/new"))" />
+</RadzenStack>
 
-<div class="row g-2 mb-3">
-    <div class="col-md-5">
-        <input class="form-control"
-               placeholder="Search by name"
-               @bind="searchText"
-               @bind:event="oninput"
-               @onkeydown="OnSearchKeyDown" />
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-outline-primary" type="button" @onclick="ApplySearch">Search</button>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">Clear</button>
-    </div>
-</div>
+<RadzenDataGrid @ref="grid"
+                TItem="StudentDto"
+                Data="@students"
+                Count="@totalCount"
+                LoadData="@LoadData"
+                IsLoading="@isLoading"
+                AllowPaging="true"
+                PageSize="10"
+                PageSizeOptions="@pageSizeOptions"
+                ShowPagingSummary="true"
+                PagerHorizontalAlign="HorizontalAlign.Center"
+                AllowSorting="true"
+                AllowFiltering="true"
+                FilterMode="FilterMode.Simple">
+    <Columns>
+        <RadzenDataGridColumn TItem="StudentDto" Property="Id" Title="ID" Width="80px" Filterable="false" />
 
-<Alert Message="@error" />
+        <RadzenDataGridColumn TItem="StudentDto" Property="Name" Title="Name" />
 
-@if (loading)
-{
-    <p>Loading...</p>
-}
-else if (students.Data.Count == 0)
-{
-    <p class="text-muted">No students found.</p>
-}
-else
-{
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th role="button" @onclick='() => SortBy("Id")'>ID @SortIcon("Id")</th>
-                <th role="button" @onclick='() => SortBy("Name")'>Name @SortIcon("Name")</th>
-                <th role="button" @onclick='() => SortBy("Email")'>Email @SortIcon("Email")</th>
-                <th>Age</th>
-                <th>Active courses</th>
-                <th class="text-end">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var s in students.Data)
-            {
-                <tr>
-                    <td>@s.Id</td>
-                    <td>@s.Name</td>
-                    <td>@s.Email</td>
-                    <td>@(s.Age?.ToString() ?? "-")</td>
-                    <td>@s.ActiveCourses</td>
-                    <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="@($"students/{s.Id}")">Edit</a>
-                        <a class="btn btn-sm btn-outline-success" href="@($"scorecard/{s.Id}")">Scorecard</a>
-                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => DeleteAsync(s)">Delete</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+        <RadzenDataGridColumn TItem="StudentDto" Property="Email" Title="Email" />
 
-    <Pager PageNumber="PageNumber"
-           PageSize="PageSize"
-           TotalCount="students.Pagination.TotalCount"
-           PageChanged="GoToPage" />
-}
+        <RadzenDataGridColumn TItem="StudentDto" Property="Age" Title="Age" Width="90px"
+                              Sortable="false" Filterable="false">
+            <Template Context="s">@(s.Age?.ToString() ?? "-")</Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="StudentDto" Property="ActiveCourses" Title="Active courses" Width="140px"
+                              Sortable="false" Filterable="false" />
+
+        <RadzenDataGridColumn TItem="StudentDto" Title="Actions" Width="190px"
+                              Sortable="false" Filterable="false" TextAlign="TextAlign.Center">
+            <Template Context="s">
+                <RadzenButton Icon="edit" Size="ButtonSize.Small" title="Edit"
+                              Click="@(() => Nav.NavigateTo($"students/{s.Id}"))" />
+                <RadzenButton Icon="grading" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Success" title="Scorecard"
+                              Click="@(() => Nav.NavigateTo($"scorecard/{s.Id}"))" />
+                <RadzenButton Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" title="Delete"
+                              Click="@(() => DeleteAsync(s))" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
 
 @code {
-    private const int PageSize = 10;
+    private static readonly string[] SortableColumns = { "Id", "Name", "Email" };
 
-    // Search, page and sort live in the URL: /students?search=ram&page=2&sort=Name&order=desc
-    // so the browser back button and bookmarks keep working.
-    [SupplyParameterFromQuery(Name = "search")] public string? Search { get; set; }
-    [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
-    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
-    [SupplyParameterFromQuery(Name = "order")] public string? Order { get; set; }
+    private RadzenDataGrid<StudentDto> grid = default!;
+    private IEnumerable<int> pageSizeOptions = new[] { 5, 10, 20, 50 };
+    private List<StudentDto> students = new();
+    private int totalCount; 
+    private bool isLoading;
 
-    private ApiPage<StudentDto> students = new();
-    private string searchText = "";
-    private bool loading;
-    private string? error;
-
-    private int PageNumber => PageParam is > 0 ? PageParam.Value : 1;
-    private string CurrentSort => string.IsNullOrWhiteSpace(Sort) ? "Id" : Sort;
-    private string CurrentOrder => string.Equals(Order, "desc", StringComparison.OrdinalIgnoreCase) ? "desc" : "asc";
-
-    // Runs on the first visit and again whenever the query string changes
-    protected override async Task OnParametersSetAsync()
+    // Radzen calls this on the first render and on every page, page-size, sort or filter change
+    protected override async Task OnInitializedAsync()
     {
-        searchText = Search ?? "";
-        await LoadAsync();
+        await LoadData(new LoadDataArgs());
     }
 
-    private async Task LoadAsync()
+    private async Task LoadData(LoadDataArgs args)
     {
-        loading = true;
-        error = null;
+        isLoading = true;
+        await Task.Yield();
 
-        var result = await Api.GetStudentsAsync(Search, PageNumber, PageSize, CurrentSort, CurrentOrder);
+        var top = args.Top ?? 10;
+        var skip = args.Skip ?? 0;
+        var pageNumber = skip / top + 1;
+
+        var (sortBy, sortOrder) = GridHelpers.ParseSort(args.OrderBy, SortableColumns);
+
+        string? name = null;
+        string? email = null;
+        foreach (var filter in args.Filters ?? Enumerable.Empty<FilterDescriptor>())
+        {
+            var value = filter.FilterValue?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            switch (filter.Property)
+            {
+                case "Name": name = value; break;
+                case "Email": email = value; break;
+            }
+        }
+
+        var result = await Api.GetStudentsAsync(name, pageNumber, top, sortBy, sortOrder, CancellationToken.None);
 
         if (result.Success)
         {
-            students = result.Value!;
+            students = result.Value!.Data;
+            totalCount = result.Value.Pagination.TotalCount;
         }
         else
         {
-            students = new ApiPage<StudentDto>();
-            error = result.Error;
+            students = new List<StudentDto>();
+            totalCount = 0;
+            Notifications.Error(result.Error ?? "Could not load students.");
         }
 
-        loading = false;
+        isLoading = false;
     }
-
-    private void Navigate(string? search, int page, string sort, string order)
-    {
-        var uri = Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
-        {
-            ["search"] = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
-            ["page"] = page <= 1 ? null : page,
-            ["sort"] = sort == "Id" ? null : sort,
-            ["order"] = order == "asc" ? null : order
-        });
-
-        Nav.NavigateTo(uri);
-    }
-
-    private void ApplySearch() => Navigate(searchText, 1, CurrentSort, CurrentOrder);
-
-    private void ClearSearch() => Navigate(null, 1, CurrentSort, CurrentOrder);
-
-    private void OnSearchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-            ApplySearch();
-    }
-
-    private void GoToPage(int page) => Navigate(Search, page, CurrentSort, CurrentOrder);
-
-    private void SortBy(string column)
-    {
-        var order = CurrentSort.Equals(column, StringComparison.OrdinalIgnoreCase) && CurrentOrder == "asc"
-            ? "desc"
-            : "asc";
-
-        Navigate(Search, 1, column, order);
-    }
-
-    private string SortIcon(string column) =>
-        CurrentSort.Equals(column, StringComparison.OrdinalIgnoreCase)
-            ? (CurrentOrder == "desc" ? "▼" : "▲")
-            : "";
 
     private async Task DeleteAsync(StudentDto student)
     {
-        var confirmed = await JS.InvokeAsync<bool>(
-            "confirm", $"Delete {student.Name} together with their enrollments and scores?");
+        var confirmed = await Dialog.Confirm(
+            $"Delete {student.Name} together with their enrollments and scores?",
+            "Delete student",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
 
-        if (!confirmed)
+        if (confirmed != true)
             return;
 
         var result = await Api.DeleteStudentAsync(student.Id);
         if (!result.Success)
         {
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Could not delete the student.");
             return;
         }
 
-        await LoadAsync();
+        Notifications.Success("Student deleted.");
+        await grid.Reload();
     }
 }

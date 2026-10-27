@@ -1,175 +1,186 @@
 @page "/courses"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
+
 @inject EducationApi Api
 @inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notifications
 @inject IJSRuntime JS
+
 
 <PageTitle>Courses</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Courses</h3>
-    <a class="btn btn-primary" href="courses/new">Add course</a>
-</div>
+<RadzenStack Orientation="Orientation.Horizontal"
+             JustifyContent="JustifyContent.SpaceBetween"
+             AlignItems="AlignItems.Center"
+             class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">Courses</RadzenText>
+    <RadzenButton Text="Add course" Icon="add_circle" ButtonStyle="ButtonStyle.Primary"
+                  Click="@(() => Nav.NavigateTo("courses/new"))" />
+</RadzenStack>
 
-<div class="row g-2 mb-3">
-    <div class="col-md-4">
-        <input class="form-control"
-               placeholder="Search by code or title"
-               @bind="searchText"
-               @bind:event="oninput"
-               @onkeydown="OnSearchKeyDown" />
-    </div>
-    <div class="col-md-3">
-        <select class="form-select" @onchange="OnActiveChanged">
-            <option value="" selected="@(Active is null)">All courses</option>
-            <option value="true" selected="@(Active == true)">Open only</option>
-            <option value="false" selected="@(Active == false)">Closed only</option>
-        </select>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-outline-primary" type="button" @onclick="ApplySearch">Search</button>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-outline-secondary" type="button" @onclick="ClearFilters">Clear</button>
-    </div>
-</div>
+<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center" class="rz-mb-4">
+    <RadzenTextBox @bind-Value="searchText" Placeholder="Search by code or title" Style="width:280px" />
+    <RadzenDropDown TValue="string"
+                    @bind-Value="statusValue"
+                    Data="@statusOptions"
+                    TextProperty="Text"
+                    ValueProperty="Value"
+                    Style="width:180px" />
+    <RadzenButton Text="Search" Icon="search" Click="ApplyFilters" />
+    <RadzenButton Text="Clear" ButtonStyle="ButtonStyle.Light" Click="ClearFilters" />
+</RadzenStack>
 
-<Alert Message="@error" />
+<RadzenDataGrid @ref="grid"
+                TItem="CourseDto"
+                Data="@courses"
+                Count="@totalCount"
+                LoadData="@LoadData"
+                IsLoading="@isLoading"
+                AllowPaging="true"
+                PageSize="10"
+                PageSizeOptions="@pageSizeOptions"
+                ShowPagingSummary="true"
+                PagerHorizontalAlign="HorizontalAlign.Center"
+                AllowSorting="false"
+                AllowFiltering="false">
+    <Columns>
+        <RadzenDataGridColumn TItem="CourseDto" Property="Code" Title="Code" Width="140px" />
+        <RadzenDataGridColumn TItem="CourseDto" Property="Title" Title="Title" />
+        <RadzenDataGridColumn TItem="CourseDto" Property="Credits" Title="Credits" Width="100px" />
 
-@if (loading)
-{
-    <p>Loading...</p>
-}
-else if (courses.Data.Count == 0)
-{
-    <p class="text-muted">No courses found.</p>
-}
-else
-{
-    <table class="table table-striped align-middle">
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Title</th>
-                <th>Credits</th>
-                <th>Status</th>
-                <th class="text-end">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var c in courses.Data)
-            {
-                <tr>
-                    <td>@c.Code</td>
-                    <td>@c.Title</td>
-                    <td>@c.Credits</td>
-                    <td>
-                        <span class="badge @(c.IsActive ? "bg-success" : "bg-secondary")">@(c.IsActive ? "Open" : "Closed")</span>
-                    </td>
-                    <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="@($"courses/{c.Id}")">Edit</a>
-                        <a class="btn btn-sm btn-outline-info" href="@($"courses/{c.Id}/assessments")">Assessments</a>
-                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => DeleteAsync(c)">Delete</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+        <RadzenDataGridColumn TItem="CourseDto" Title="Status" Width="120px">
+            <Template Context="c">
+                <RadzenBadge BadgeStyle="@(c.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)"
+                             Text="@(c.IsActive ? "Open" : "Closed")" />
+            </Template>
+        </RadzenDataGridColumn>
 
-    <Pager PageNumber="PageNumber"
-           PageSize="PageSize"
-           TotalCount="courses.Pagination.TotalCount"
-           PageChanged="GoToPage" />
-}
+        <RadzenDataGridColumn TItem="CourseDto" Title="Actions" Width="190px" TextAlign="TextAlign.Center">
+            <Template Context="c">
+                <RadzenButton Icon="edit" Size="ButtonSize.Small" title="Edit"
+                              Click="@(() => Nav.NavigateTo($"courses/{c.Id}"))" />
+                <RadzenButton Icon="assignment" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Info" title="Assessments"
+                              Click="@(() => Nav.NavigateTo($"courses/{c.Id}/assessments"))" />
+                <RadzenButton Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" title="Delete"
+                              Click="@(() => DeleteAsync(c))" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
 
 @code {
-    private const int PageSize = 10;
+    private record StatusOption(string Text, string Value);
 
+    // Filters live in the URL: /courses?search=cs&active=true
     [SupplyParameterFromQuery(Name = "search")] public string? Search { get; set; }
     [SupplyParameterFromQuery(Name = "active")] public bool? Active { get; set; }
-    [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
 
-    private ApiPage<CourseDto> courses = new();
+    private RadzenDataGrid<CourseDto> grid = default!;
+    private IEnumerable<int> pageSizeOptions = new[] { 5, 10, 20, 50 };
+
+    private readonly List<StatusOption> statusOptions = new()
+    {
+        new("All courses", "all"),
+        new("Open only", "true"),
+        new("Closed only", "false")
+    };
+
+    private List<CourseDto> courses = new();
+    private int totalCount;
+    private bool isLoading;
     private string searchText = "";
-    private bool loading;
-    private string? error;
+    private string statusValue = "all";
 
-    private int PageNumber => PageParam is > 0 ? PageParam.Value : 1;
-
+    // Runs on the first visit and again whenever the query string changes
     protected override async Task OnParametersSetAsync()
     {
         searchText = Search ?? "";
-        await LoadAsync();
+        statusValue = Active switch
+        {
+            true => "true",
+            false => "false",
+            _ => "all"
+        };
+
+        // On the first visit the grid does not exist yet and loads itself on first render
+        if (grid is not null)
+        {
+            await grid.GoToPage(0);
+            await grid.Reload();
+        }
     }
-
-    private async Task LoadAsync()
+    
+    protected override async Task OnInitializedAsync()
     {
-        loading = true;
-        error = null;
+        await LoadData(new LoadDataArgs());
+    }
+    
+    private async Task LoadData(LoadDataArgs args)
+    {
+        isLoading = true;
+        await Task.Yield();
 
-        var result = await Api.GetCoursesAsync(Search, Active, PageNumber, PageSize);
+        var top = args.Top ?? 10;
+        var skip = args.Skip ?? 0;
+
+        var result = await Api.GetCoursesAsync(Search, Active, skip / top + 1, top);
 
         if (result.Success)
         {
-            courses = result.Value!;
+            courses = result.Value!.Data;
+            totalCount = result.Value.Pagination.TotalCount;
         }
         else
         {
-            courses = new ApiPage<CourseDto>();
-            error = result.Error;
+            courses = new List<CourseDto>();
+            totalCount = 0;
+            Notifications.Error(result.Error ?? "Could not load courses.");
         }
 
-        loading = false;
+        isLoading = false;
     }
 
-    private void Navigate(string? search, bool? active, int page)
+    private void ApplyFilters()
     {
-        var uri = Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
-        {
-            ["search"] = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
-            ["active"] = active,
-            ["page"] = page <= 1 ? null : page
-        });
-
-        Nav.NavigateTo(uri);
-    }
-
-    private void ApplySearch() => Navigate(searchText, Active, 1);
-
-    private void ClearFilters() => Navigate(null, null, 1);
-
-    private void OnSearchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-            ApplySearch();
-    }
-
-    private void OnActiveChanged(ChangeEventArgs e)
-    {
-        bool? active = e.Value?.ToString() switch
+        bool? active = statusValue switch
         {
             "true" => true,
             "false" => false,
             _ => null
         };
 
-        Navigate(Search, active, 1);
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["search"] = string.IsNullOrWhiteSpace(searchText) ? null : searchText.Trim(),
+            ["active"] = active
+        }));
     }
 
-    private void GoToPage(int page) => Navigate(Search, Active, page);
+    private void ClearFilters() => Nav.NavigateTo("courses");
 
     private async Task DeleteAsync(CourseDto course)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete course {course.Code}?");
-        if (!confirmed)
+        var confirmed = await Dialog.Confirm(
+            $"Delete course {course.Code}?",
+            "Delete course",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+
+        if (confirmed != true)
             return;
 
         var result = await Api.DeleteCourseAsync(course.Id);
         if (!result.Success)
         {
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Could not delete the course.");
             return;
         }
 
-        await LoadAsync();
+        Notifications.Success("Course deleted.");
+        await grid.Reload();
     }
 }

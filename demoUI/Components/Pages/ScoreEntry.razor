@@ -1,114 +1,116 @@
 @page "/scores/{EnrollmentId:int}"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
 @inject EducationApi Api
+@inject NavigationManager Nav
+@inject NotificationService Notifications
 
 <PageTitle>Enter scores</PageTitle>
 
-<h3>Enter scores</h3>
-
-@if (header is not null)
-{
-    <a href="@($"students/{header.StudentId}")">&larr; Back to @header.StudentName</a>
-}
-else
-{
-    <a href="students">&larr; Back to students</a>
-}
-
-<Alert Message="@error" />
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-4">
+    <RadzenButton Icon="arrow_back"
+                  Text="@(header is null ? "Students" : header.StudentName)"
+                  ButtonStyle="ButtonStyle.Light"
+                  Click="@(() => Nav.NavigateTo(header is null ? "students" : $"students/{header.StudentId}"))" />
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">Enter scores</RadzenText>
+</RadzenStack>
 
 @if (loading)
 {
-    <p class="mt-3">Loading...</p>
+    <RadzenText>Loading...</RadzenText>
 }
-else if (header is not null)
+else if (header is null)
+{
+    <RadzenText>This enrollment does not exist.</RadzenText>
+}
+else
 {
     var course = header.Course;
     var dropped = course.Status == EnrollmentStatus.Dropped;
 
-    <div class="card my-3">
-        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-                <div><strong>@header.StudentName</strong></div>
-                <div>@course.CourseCode - @course.CourseTitle
-                    <span class="badge @UiHelpers.StatusBadge(course.Status) ms-1">@course.Status</span>
-                </div>
-            </div>
-            <div class="text-end">
-                <span class="fs-5 me-2">@($"{course.FinalPercentage:0.##}%")</span>
-                <span class="badge fs-6 @UiHelpers.GradeBadge(course.Grade)">@course.Grade</span>
-                <div>
-                    <a href="@($"scorecard/{header.StudentId}")">Open full scorecard</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <RadzenCard class="rz-mb-4">
+        <RadzenStack Orientation="Orientation.Horizontal"
+                     JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.Center">
+            <RadzenStack Gap="0.25rem">
+                <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">@header.StudentName</RadzenText>
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenText TextStyle="TextStyle.Body1" class="rz-m-0">@course.CourseCode - @course.CourseTitle</RadzenText>
+                    <RadzenBadge BadgeStyle="@UiHelpers.StatusBadge(course.Status)" Text="@course.Status.ToString()" />
+                </RadzenStack>
+            </RadzenStack>
+            <RadzenStack AlignItems="AlignItems.End" Gap="0.25rem">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">@($"{course.FinalPercentage:0.##}%")</RadzenText>
+                    <RadzenBadge BadgeStyle="@UiHelpers.GradeBadge(course.Grade)" Text="@course.Grade" />
+                </RadzenStack>
+                <RadzenButton Text="Open full scorecard" Icon="grading" Size="ButtonSize.Small"
+                              ButtonStyle="ButtonStyle.Success"
+                              Click="@(() => Nav.NavigateTo($"scorecard/{header.StudentId}"))" />
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenCard>
 
     @if (dropped)
     {
-        <Alert Kind="warning" Message="This enrollment was dropped, so scores can no longer be changed." />
+        <RadzenText TextStyle="TextStyle.Body2" class="rz-mb-2" Style="color:var(--rz-warning)">
+            This enrollment was dropped, so scores can no longer be changed.
+        </RadzenText>
     }
 
     @if (rows.Count == 0)
     {
-        <p class="text-muted">
+        <RadzenText>
             This course has no assessments yet.
-            <a href="@($"courses/{course.CourseId}/assessments")">Add assessments</a> first.
-        </p>
+        </RadzenText>
+        <RadzenButton Text="Add assessments" Icon="assignment" ButtonStyle="ButtonStyle.Info"
+                      Click="@(() => Nav.NavigateTo($"courses/{course.CourseId}/assessments"))" />
     }
     else
     {
-        <table class="table align-middle">
-            <thead>
-                <tr>
-                    <th>Assessment</th>
-                    <th>Max</th>
-                    <th>Weight</th>
-                    <th style="width:140px">Marks</th>
-                    <th>Remarks</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in rows)
-                {
-                    <tr>
-                        <td>@row.Name</td>
-                        <td>@row.MaxMarks.ToString("0.##")</td>
-                        <td>@row.Weightage.ToString("0.##")%</td>
-                        <td>
-                            <input type="number" step="0.01" min="0" max="@row.MaxMarks"
-                                   class="form-control form-control-sm"
-                                   @bind="row.Marks"
-                                   disabled="@dropped" />
-                        </td>
-                        <td>
-                            <input class="form-control form-control-sm" maxlength="255"
-                                   @bind="row.Remarks"
-                                   disabled="@dropped" />
-                        </td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-primary" type="button"
-                                    disabled="@dropped"
-                                    @onclick="() => SaveRowAsync(row)">Save</button>
-                            @if (row.ScoreId is not null)
-                            {
-                                <button class="btn btn-sm btn-outline-danger" type="button"
-                                        disabled="@dropped"
-                                        @onclick="() => ClearRowAsync(row)">Clear</button>
-                            }
-                            @if (row.Saved)
-                            {
-                                <span class="text-success ms-1">Saved</span>
-                            }
-                            @if (!string.IsNullOrEmpty(row.Error))
-                            {
-                                <div class="text-danger small">@row.Error</div>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <RadzenDataGrid TItem="ScoreRow" Data="@rows" AllowPaging="false" AllowSorting="false">
+            <Columns>
+                <RadzenDataGridColumn TItem="ScoreRow" Property="Name" Title="Assessment" />
+
+                <RadzenDataGridColumn TItem="ScoreRow" Title="Max" Width="90px">
+                    <Template Context="row">@row.MaxMarks.ToString("0.##")</Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="ScoreRow" Title="Weight" Width="100px">
+                    <Template Context="row">@($"{row.Weightage:0.##}%")</Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="ScoreRow" Title="Marks" Width="170px">
+                    <Template Context="row">
+                        <RadzenNumeric TValue="decimal?" @bind-Value="row.Marks"
+                                       Min="0" Max="@row.MaxMarks" Step="0.5"
+                                       Disabled="@dropped" Style="width:100%" />
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="ScoreRow" Title="Remarks" Width="260px">
+                    <Template Context="row">
+                        <RadzenTextBox @bind-Value="row.Remarks" Disabled="@dropped" Style="width:100%" />
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="ScoreRow" Title="Actions" Width="170px" TextAlign="TextAlign.Center">
+                    <Template Context="row">
+                        <RadzenButton Text="Save" Icon="save" Size="ButtonSize.Small" Disabled="@dropped"
+                                      Click="@(() => SaveRowAsync(row))" />
+                        @if (row.ScoreId is not null)
+                        {
+                            <RadzenButton Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger"
+                                          title="Clear this score" Disabled="@dropped"
+                                          Click="@(() => ClearRowAsync(row))" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
     }
 }
 
@@ -119,7 +121,6 @@ else if (header is not null)
     private EnrollmentScorecardDto? header;
     private List<ScoreRow> rows = new();
     private bool loading;
-    private string? error;
 
     private class ScoreRow
     {
@@ -130,21 +131,18 @@ else if (header is not null)
         public decimal? Marks { get; set; }
         public string? Remarks { get; set; }
         public int? ScoreId { get; set; }
-        public bool Saved { get; set; }
-        public string? Error { get; set; }
     }
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
-        error = null;
         header = null;
         rows = new List<ScoreRow>();
 
         var card = await Api.GetEnrollmentScorecardAsync(EnrollmentId);
         if (!card.Success)
         {
-            error = card.Error;
+            Notifications.Error(card.Error ?? "Enrollment not found.");
             loading = false;
             return;
         }
@@ -177,51 +175,46 @@ else if (header is not null)
 
     private async Task SaveRowAsync(ScoreRow row)
     {
-        row.Error = null;
-        row.Saved = false;
-
         if (row.Marks is null)
         {
-            row.Error = "Enter the marks first.";
+            Notifications.Warning($"Enter the marks for {row.Name} first.");
             return;
         }
 
         if (row.Marks < 0 || row.Marks > row.MaxMarks)
         {
-            row.Error = $"Marks must be between 0 and {row.MaxMarks:0.##}.";
+            Notifications.Warning($"Marks for {row.Name} must be between 0 and {row.MaxMarks:0.##}.");
             return;
         }
 
         var result = await Api.SaveScoreAsync(EnrollmentId, row.AssessmentId, row.Marks.Value, row.Remarks);
         if (!result.Success)
         {
-            row.Error = result.Error;
+            Notifications.Error(result.Error ?? "Could not save the score.");
             return;
         }
 
         row.ScoreId = result.Value!.Id;
-        row.Saved = true;
+        Notifications.Success($"{row.Name} saved.");
         await RefreshSummaryAsync();
     }
 
     private async Task ClearRowAsync(ScoreRow row)
     {
-        row.Error = null;
-        row.Saved = false;
-
         if (row.ScoreId is null)
             return;
 
         var result = await Api.DeleteScoreAsync(row.ScoreId.Value);
         if (!result.Success)
         {
-            row.Error = result.Error;
+            Notifications.Error(result.Error ?? "Could not clear the score.");
             return;
         }
 
         row.ScoreId = null;
         row.Marks = null;
         row.Remarks = null;
+        Notifications.Success($"{row.Name} cleared.");
         await RefreshSummaryAsync();
     }
 

@@ -1,36 +1,51 @@
 @page "/"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
+@inject EducationApi Api
+@inject NavigationManager Nav
 
 <PageTitle>Education Management</PageTitle>
 
-<h2>Education Management</h2>
-<p class="text-muted">Manage students, courses, enrollments and scorecards.</p>
+<RadzenText TextStyle="TextStyle.H3">Education Management</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-4">
+    Manage students, courses, enrollments and scorecards.
+</RadzenText>
 
-<div class="row g-3">
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Students</h5>
-                <p class="card-text">Add students with 1 to 3 courses, edit details, and manage their enrollments.</p>
-                <a class="btn btn-primary" href="students">Open students</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Courses</h5>
-                <p class="card-text">Maintain courses and define the assessments and weightage of each one.</p>
-                <a class="btn btn-primary" href="courses">Open courses</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <h5 class="card-title">Scorecards</h5>
-                <p class="card-text">See the final percentage and grade of every course a student is taking.</p>
-                <a class="btn btn-primary" href="scorecard">Open scorecards</a>
-            </div>
-        </div>
-    </div>
-</div>
+<RadzenRow Gap="1rem">
+    <RadzenColumn Size="12" SizeMD="4">
+        <RadzenCard>
+            <RadzenStack Gap="0.75rem">
+                <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">Students</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body2">
+                    Add students with 1 to 3 courses, edit details, and manage their enrollments.
+                </RadzenText>
+                <RadzenButton Text="Open students" Icon="school" Click="@(() => Nav.NavigateTo("students"))" />
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+    <RadzenColumn Size="12" SizeMD="4">
+        <RadzenCard>
+            <RadzenStack Gap="0.75rem">
+                <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">Courses</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body2">
+                    Maintain courses and define the assessments and weightage of each one.
+                </RadzenText>
+                <RadzenButton Text="Open courses" Icon="menu_book" Click="@(() => Nav.NavigateTo("courses"))" />
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+    <RadzenColumn Size="12" SizeMD="4">
+        <RadzenCard>
+            <RadzenStack Gap="0.75rem">
+                <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">Scorecards</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body2">
+                    See the final percentage and grade of every course a student is taking.
+                </RadzenText>
+                <RadzenButton Text="Open scorecards" Icon="grading" Click="@(() => Nav.NavigateTo("scorecard"))" />
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+</RadzenRow>

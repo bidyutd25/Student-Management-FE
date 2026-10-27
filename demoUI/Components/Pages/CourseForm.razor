@@ -1,62 +1,83 @@
 @page "/courses/new"
 @page "/courses/{Id:int}"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
+
 @inject EducationApi Api
 @inject NavigationManager Nav
+@inject NotificationService Notifications
 
 <PageTitle>@(IsEdit ? "Edit course" : "New course")</PageTitle>
 
-<h3>@(IsEdit ? "Edit course" : "Add course")</h3>
-<a href="courses">&larr; Back to courses</a>
-
-<Alert Message="@error" />
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-4">
+    <RadzenButton Icon="arrow_back" Text="Courses" ButtonStyle="ButtonStyle.Light"
+                  Click="@(() => Nav.NavigateTo("courses"))" />
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">@(IsEdit ? "Edit course" : "Add course")</RadzenText>
+</RadzenStack>
 
 @if (loading)
 {
-    <p class="mt-3">Loading...</p>
+    <RadzenText>Loading...</RadzenText>
 }
 else if (notFound)
 {
-    <p class="mt-3 text-muted">This course does not exist.</p>
+    <RadzenText>This course does not exist.</RadzenText>
 }
 else
 {
-    <EditForm Model="model" OnValidSubmit="SaveAsync" class="mt-3" style="max-width:560px">
-        <DataAnnotationsValidator />
+    <RadzenTemplateForm TItem="CourseFormModel" Data="@model" Submit="@SaveAsync" Style="max-width:560px">
+        <RadzenStack Gap="1rem">
 
-        <div class="mb-3">
-            <label class="form-label" for="code">Code</label>
-            <InputText id="code" class="form-control" @bind-Value="model.Code" />
-            <ValidationMessage For="() => model.Code" />
-        </div>
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Code" Component="CourseCode" />
+                <RadzenTextBox Name="CourseCode" @bind-Value="model.Code" Style="width:100%" />
+                <RadzenRequiredValidator Component="CourseCode" Text="Code is required" />
+                <RadzenLengthValidator Component="CourseCode" Min="2" Max="20"
+                                       Text="Code must be 2 to 20 characters" />
+            </RadzenStack>
 
-        <div class="mb-3">
-            <label class="form-label" for="title">Title</label>
-            <InputText id="title" class="form-control" @bind-Value="model.Title" />
-            <ValidationMessage For="() => model.Title" />
-        </div>
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Title" Component="CourseTitle" />
+                <RadzenTextBox Name="CourseTitle" @bind-Value="model.Title" Style="width:100%" />
+                <RadzenRequiredValidator Component="CourseTitle" Text="Title is required" />
+                <RadzenLengthValidator Component="CourseTitle" Min="2" Max="150"
+                                       Text="Title must be 2 to 150 characters" />
+            </RadzenStack>
 
-        <div class="mb-3">
-            <label class="form-label" for="credits">Credits</label>
-            <InputNumber id="credits" class="form-control" @bind-Value="model.Credits" />
-            <ValidationMessage For="() => model.Credits" />
-        </div>
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Credits" Component="CourseCredits" />
+                <RadzenNumeric Name="CourseCredits" TValue="int" @bind-Value="model.Credits"
+                               Min="1" Max="10" Style="width:100%" />
+                <RadzenNumericRangeValidator Component="CourseCredits" Min="1" Max="10"
+                                             Text="Credits must be between 1 and 10" />
+            </RadzenStack>
 
-        <div class="form-check mb-3">
-            <InputCheckbox id="active" class="form-check-input" @bind-Value="model.IsActive" />
-            <label class="form-check-label" for="active">Open for enrollment</label>
-        </div>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenCheckBox Name="CourseOpen" TValue="bool" @bind-Value="model.IsActive" />
+                <RadzenLabel Text="Open for enrollment" Component="CourseOpen" />
+            </RadzenStack>
 
-        <button class="btn btn-primary" type="submit" disabled="@saving">@(IsEdit ? "Save changes" : "Create course")</button>
-        <a class="btn btn-outline-secondary" href="courses">Cancel</a>
-
-        @if (IsEdit)
-        {
-            <a class="btn btn-outline-info ms-2" href="@($"courses/{Id}/assessments")">Manage assessments</a>
-        }
-    </EditForm>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton ButtonType="ButtonType.Submit" Icon="save" Disabled="@saving"
+                              Text="@(IsEdit ? "Save changes" : "Create course")" />
+                <RadzenButton ButtonType="ButtonType.Button" Text="Cancel" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => Nav.NavigateTo("courses"))" />
+                @if (IsEdit)
+                {
+                    <RadzenButton ButtonType="ButtonType.Button" Text="Manage assessments" Icon="assignment"
+                                  ButtonStyle="ButtonStyle.Info"
+                                  Click="@(() => Nav.NavigateTo($"courses/{Id}/assessments"))" />
+                }
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenTemplateForm>
 }
 
 @code {
+    // /courses/new has no Id, /courses/3 has Id = 3
     [Parameter] public int? Id { get; set; }
 
     private bool IsEdit => Id.HasValue;
@@ -65,7 +86,6 @@ else
     private bool loading;
     private bool saving;
     private bool notFound;
-    private string? error;
 
     private int? loadedId;
     private bool initialised;
@@ -78,7 +98,6 @@ else
         initialised = true;
         loadedId = Id;
 
-        error = null;
         notFound = false;
         model = new CourseFormModel();
 
@@ -102,15 +121,14 @@ else
         else
         {
             notFound = true;
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Course not found.");
         }
 
         loading = false;
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync(CourseFormModel submitted)
     {
-        error = null;
         saving = true;
 
         try
@@ -120,9 +138,14 @@ else
                 : await Api.CreateCourseAsync(model);
 
             if (result.Success)
+            {
+                Notifications.Success(IsEdit ? "Course saved." : "Course created.");
                 Nav.NavigateTo("courses");
+            }
             else
-                error = result.Error;
+            {
+                Notifications.Error(result.Error ?? "Could not save the course.");
+            }
         }
         finally
         {

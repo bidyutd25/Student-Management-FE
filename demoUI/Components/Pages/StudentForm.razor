@@ -1,153 +1,183 @@
 @page "/students/new"
 @page "/students/{Id:int}"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
 @inject EducationApi Api
 @inject NavigationManager Nav
+@inject NotificationService Notifications
 
 <PageTitle>@(IsEdit ? "Edit student" : "New student")</PageTitle>
 
-<h3>@(IsEdit ? "Edit student" : "Add student")</h3>
-<a href="students">&larr; Back to students</a>
-
-<Alert Message="@error" />
-<Alert Message="@message" Kind="success" />
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-4">
+    <RadzenButton Icon="arrow_back" Text="Students" ButtonStyle="ButtonStyle.Light"
+                  Click="@(() => Nav.NavigateTo("students"))" />
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">@(IsEdit ? "Edit student" : "Add student")</RadzenText>
+</RadzenStack>
 
 @if (loading)
 {
-    <p class="mt-3">Loading...</p>
+    <RadzenText>Loading...</RadzenText>
 }
-else if (!notFound)
+else if (notFound)
 {
-    <EditForm Model="model" OnValidSubmit="SaveAsync" class="mt-3" style="max-width:560px">
-        <DataAnnotationsValidator />
-
-        <div class="mb-3">
-            <label class="form-label" for="name">Name</label>
-            <InputText id="name" class="form-control" @bind-Value="model.Name" />
-            <ValidationMessage For="() => model.Name" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label" for="email">Email</label>
-            <InputText id="email" class="form-control" @bind-Value="model.Email" />
-            <ValidationMessage For="() => model.Email" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label" for="dob">Date of birth</label>
-            <InputDate id="dob" class="form-control" @bind-Value="model.DateOfBirth" />
-        </div>
-
-        @if (!IsEdit)
-        {
-            <div class="mb-3">
-                <label class="form-label">Courses (choose 1 to 3)</label>
-                @if (activeCourses.Count == 0)
-                {
-                    <p class="text-muted">There are no open courses yet. <a href="courses/new">Create a course</a> first.</p>
-                }
-                @foreach (var course in activeCourses)
-                {
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               id="@($"course-{course.Id}")"
-                               checked="@selectedIds.Contains(course.Id)"
-                               disabled="@(!selectedIds.Contains(course.Id) && selectedIds.Count >= MaxCourses)"
-                               @onchange="e => ToggleCourse(course.Id, (bool)e.Value!)" />
-                        <label class="form-check-label" for="@($"course-{course.Id}")">@course.Code - @course.Title</label>
-                    </div>
-                }
-                <div class="form-text">Selected: @selectedIds.Count of @MaxCourses</div>
-            </div>
-        }
-
-        <button class="btn btn-primary" type="submit" disabled="@saving">@(IsEdit ? "Save changes" : "Create student")</button>
-        <a class="btn btn-outline-secondary" href="students">Cancel</a>
-    </EditForm>
-
-    @if (IsEdit)
-    {
-        <hr class="my-4" />
-        <div class="d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">Enrollments</h4>
-            <a class="btn btn-outline-success btn-sm" href="@($"scorecard/{Id}")">View scorecard</a>
-        </div>
-
-        @if (enrollments.Count == 0)
-        {
-            <p class="text-muted mt-2">No enrollments.</p>
-        }
-        else
-        {
-            <table class="table align-middle mt-2">
-                <thead>
-                    <tr>
-                        <th>Course</th>
-                        <th>Status</th>
-                        <th>Enrolled on</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var e in enrollments)
-                    {
-                        <tr>
-                            <td>@e.CourseCode - @e.CourseTitle</td>
-                            <td><span class="badge @UiHelpers.StatusBadge(e.Status)">@e.Status</span></td>
-                            <td>@e.EnrolledOn.ToString("dd MMM yyyy")</td>
-                            <td class="text-end">
-                                @if (e.Status != EnrollmentStatus.Dropped)
-                                {
-                                    <a class="btn btn-sm btn-outline-primary" href="@($"scores/{e.Id}")">Scores</a>
-                                }
-                                @if (e.Status == EnrollmentStatus.Active)
-                                {
-                                    <button class="btn btn-sm btn-outline-success" type="button"
-                                            @onclick="() => ChangeStatusAsync(e, EnrollmentStatus.Completed)">Complete</button>
-                                    <button class="btn btn-sm btn-outline-danger" type="button"
-                                            @onclick="() => ChangeStatusAsync(e, EnrollmentStatus.Dropped)">Drop</button>
-                                }
-                                @if (e.Status == EnrollmentStatus.Dropped)
-                                {
-                                    <button class="btn btn-sm btn-outline-secondary" type="button"
-                                            @onclick="() => ChangeStatusAsync(e, EnrollmentStatus.Active)">Re-enroll</button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-
-        <div class="mt-3" style="max-width:560px">
-            @if (ActiveCount >= MaxCourses)
-            {
-                <p class="text-muted">This student already has @MaxCourses active courses. Complete or drop one to enroll in another.</p>
-            }
-            else if (enrollableCourses.Count == 0)
-            {
-                <p class="text-muted">There are no other open courses to enroll in.</p>
-            }
-            else
-            {
-                <label class="form-label" for="enroll">Enroll in another course</label>
-                <div class="input-group">
-                    <select id="enroll" class="form-select" @bind="selectedCourseId">
-                        <option value="0">Select a course...</option>
-                        @foreach (var c in enrollableCourses)
-                        {
-                            <option value="@c.Id">@c.Code - @c.Title</option>
-                        }
-                    </select>
-                    <button class="btn btn-primary" type="button" @onclick="EnrollAsync" disabled="@(selectedCourseId == 0)">Enroll</button>
-                </div>
-            }
-        </div>
-    }
+    <RadzenText>This student does not exist.</RadzenText>
 }
 else
 {
-    <p class="mt-3 text-muted">This student does not exist.</p>
+    <RadzenTemplateForm TItem="StudentFormModel" Data="@model" Submit="@SaveAsync" Style="max-width:560px">
+        <RadzenStack Gap="1rem">
+
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Name" Component="StudentName" />
+                <RadzenTextBox Name="StudentName" @bind-Value="model.Name" Style="width:100%" />
+                <RadzenRequiredValidator Component="StudentName" Text="Name is required" />
+                <RadzenLengthValidator Component="StudentName" Min="2" Max="100"
+                                       Text="Name must be 2 to 100 characters" />
+            </RadzenStack>
+
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Email" Component="StudentEmail" />
+                <RadzenTextBox Name="StudentEmail" @bind-Value="model.Email" Style="width:100%" />
+                <RadzenRequiredValidator Component="StudentEmail" Text="Email is required" />
+                <RadzenRegexValidator Component="StudentEmail"
+                                      Pattern="@StudentFormModel.EmailPattern"
+                                      Text="Enter a valid email address" />
+            </RadzenStack>
+
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Date of birth" Component="StudentDob" />
+                <RadzenDatePicker Name="StudentDob" TValue="DateTime?" @bind-Value="dateOfBirth"
+                                  DateFormat="dd MMM yyyy" Style="width:100%" />
+            </RadzenStack>
+
+            @if (!IsEdit)
+            {
+                <RadzenStack Gap="0.25rem">
+                    <RadzenLabel Text="Courses (choose 1 to 3)" Component="StudentCourses" />
+                    <RadzenDropDown Name="StudentCourses"
+                                    TValue="IEnumerable<int>"
+                                    Multiple="true"
+                                    Chips="true"
+                                    AllowClear="true"
+                                    AllowFiltering="true"
+                                    Data="@activeCourses"
+                                    TextProperty="Label"
+                                    ValueProperty="Id"
+                                    @bind-Value="selectedIds"
+                                    Placeholder="Select courses"
+                                    Style="width:100%" />
+                    <RadzenText TextStyle="TextStyle.Caption"
+                                Style="@(SelectedCount > MaxCourses ? "color:var(--rz-danger)" : "")">
+                        Selected: @SelectedCount of @MaxCourses
+                    </RadzenText>
+                    @if (activeCourses.Count == 0)
+                    {
+                        <RadzenText TextStyle="TextStyle.Caption">
+                            There are no open courses yet. Create a course first.
+                        </RadzenText>
+                    }
+                </RadzenStack>
+            }
+
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton ButtonType="ButtonType.Submit" Icon="save" Disabled="@saving"
+                              Text="@(IsEdit ? "Save changes" : "Create student")" />
+                <RadzenButton ButtonType="ButtonType.Button" Text="Cancel" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => Nav.NavigateTo("students"))" />
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenTemplateForm>
+
+    @if (IsEdit)
+    {
+        <RadzenStack Orientation="Orientation.Horizontal"
+                     JustifyContent="JustifyContent.SpaceBetween"
+                     AlignItems="AlignItems.Center"
+                     class="rz-mt-6 rz-mb-2">
+            <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">Enrollments</RadzenText>
+            <RadzenButton Text="View scorecard" Icon="grading" ButtonStyle="ButtonStyle.Success" Size="ButtonSize.Small"
+                          Click="@(() => Nav.NavigateTo($"scorecard/{Id}"))" />
+        </RadzenStack>
+
+        <RadzenDataGrid TItem="EnrollmentDto" Data="@enrollments" AllowPaging="false" AllowSorting="false">
+            <EmptyTemplate>
+                <RadzenText>No enrollments.</RadzenText>
+            </EmptyTemplate>
+            <Columns>
+                <RadzenDataGridColumn TItem="EnrollmentDto" Title="Course">
+                    <Template Context="e">@e.CourseCode - @e.CourseTitle</Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="EnrollmentDto" Title="Status" Width="130px">
+                    <Template Context="e">
+                        <RadzenBadge BadgeStyle="@UiHelpers.StatusBadge(e.Status)" Text="@e.Status.ToString()" />
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="EnrollmentDto" Title="Enrolled on" Width="140px">
+                    <Template Context="e">@e.EnrolledOn.ToString("dd MMM yyyy")</Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="EnrollmentDto" Title="Actions" Width="300px" TextAlign="TextAlign.Center">
+                    <Template Context="e">
+                        @if (e.Status != EnrollmentStatus.Dropped)
+                        {
+                            <RadzenButton Text="Scores" Icon="edit_note" Size="ButtonSize.Small"
+                                          Click="@(() => Nav.NavigateTo($"scores/{e.Id}"))" />
+                        }
+                        @if (e.Status == EnrollmentStatus.Active)
+                        {
+                            <RadzenButton Text="Complete" Icon="check_circle" Size="ButtonSize.Small"
+                                          ButtonStyle="ButtonStyle.Success"
+                                          Click="@(() => ChangeStatusAsync(e, EnrollmentStatus.Completed))" />
+                            <RadzenButton Text="Drop" Icon="remove_circle" Size="ButtonSize.Small"
+                                          ButtonStyle="ButtonStyle.Danger"
+                                          Click="@(() => ChangeStatusAsync(e, EnrollmentStatus.Dropped))" />
+                        }
+                        @if (e.Status == EnrollmentStatus.Dropped)
+                        {
+                            <RadzenButton Text="Re-enroll" Icon="replay" Size="ButtonSize.Small"
+                                          ButtonStyle="ButtonStyle.Secondary"
+                                          Click="@(() => ChangeStatusAsync(e, EnrollmentStatus.Active))" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+
+        <div class="rz-mt-4" style="max-width:560px">
+            @if (ActiveCount >= MaxCourses)
+            {
+                <RadzenText TextStyle="TextStyle.Body2">
+                    This student already has @MaxCourses active courses. Complete or drop one to enroll in another.
+                </RadzenText>
+            }
+            else if (enrollableCourses.Count == 0)
+            {
+                <RadzenText TextStyle="TextStyle.Body2">There are no other open courses to enroll in.</RadzenText>
+            }
+            else
+            {
+                <RadzenLabel Text="Enroll in another course" Component="EnrollCourse" />
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mt-1">
+                    <RadzenDropDown Name="EnrollCourse"
+                                    TValue="int?"
+                                    AllowClear="true"
+                                    AllowFiltering="true"
+                                    Data="@enrollableCourses"
+                                    TextProperty="Label"
+                                    ValueProperty="Id"
+                                    @bind-Value="selectedCourseId"
+                                    Placeholder="Select a course..."
+                                    Style="width:100%" />
+                    <RadzenButton Text="Enroll" Icon="add" Disabled="@(selectedCourseId is null)" Click="EnrollAsync" />
+                </RadzenStack>
+            }
+        </div>
+    }
 }
 
 @code {
@@ -157,19 +187,19 @@ else
     [Parameter] public int? Id { get; set; }
 
     private bool IsEdit => Id.HasValue;
+    private int SelectedCount => selectedIds?.Count() ?? 0;
     private int ActiveCount => enrollments.Count(e => e.Status == EnrollmentStatus.Active);
 
     private StudentFormModel model = new();
+    private DateTime? dateOfBirth;
     private List<CourseDto> activeCourses = new();
     private List<EnrollmentDto> enrollments = new();
-    private HashSet<int> selectedIds = new();
-    private int selectedCourseId;
+    private IEnumerable<int> selectedIds = new List<int>();
+    private int? selectedCourseId;
 
     private bool loading;
     private bool saving;
     private bool notFound;
-    private string? error;
-    private string? message;
 
     private int? loadedId;
     private bool initialised;
@@ -189,17 +219,17 @@ else
 
         loading = true;
         notFound = false;
-        error = null;
-        message = null;
         model = new StudentFormModel();
-        selectedIds = new HashSet<int>();
+        dateOfBirth = null;
+        selectedIds = new List<int>();
         enrollments = new List<EnrollmentDto>();
-        selectedCourseId = 0;
+        selectedCourseId = null;
 
         var courses = await Api.GetCoursesAsync(null, true, 1, 100);
-        activeCourses = courses.Success ? courses.Value!.Data : new List<CourseDto>();
-        if (!courses.Success)
-            error = courses.Error;
+        if (courses.Success)
+            activeCourses = courses.Value!.Data;
+        else
+            Notifications.Error(courses.Error ?? "Could not load courses.");
 
         if (IsEdit)
             await LoadStudentAsync();
@@ -213,7 +243,7 @@ else
         if (!result.Success)
         {
             notFound = true;
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Student not found.");
             return;
         }
 
@@ -224,6 +254,7 @@ else
             Email = student.Email,
             DateOfBirth = student.DateOfBirth
         };
+        dateOfBirth = student.DateOfBirth?.ToDateTime(TimeOnly.MinValue);
 
         await ReloadEnrollmentsAsync();
     }
@@ -231,33 +262,26 @@ else
     private async Task ReloadEnrollmentsAsync()
     {
         var result = await Api.GetEnrollmentsAsync(Id, null, null, 1, 100);
-        enrollments = result.Success ? result.Value!.Data : new List<EnrollmentDto>();
-        if (!result.Success)
-            error = result.Error;
+        if (result.Success)
+            enrollments = result.Value!.Data;
+        else
+            Notifications.Error(result.Error ?? "Could not load enrollments.");
     }
 
-    private void ToggleCourse(int courseId, bool isChecked)
+    private async Task SaveAsync(StudentFormModel submitted)
     {
-        if (isChecked && selectedIds.Count < MaxCourses)
-            selectedIds.Add(courseId);
-        else if (!isChecked)
-            selectedIds.Remove(courseId);
-    }
-
-    private async Task SaveAsync()
-    {
-        error = null;
-        message = null;
+        model.DateOfBirth = dateOfBirth is null ? null : DateOnly.FromDateTime(dateOfBirth.Value);
 
         if (model.DateOfBirth is { } dob && dob > DateOnly.FromDateTime(DateTime.Today))
         {
-            error = "Date of birth cannot be in the future.";
+            Notifications.Warning("Date of birth cannot be in the future.");
             return;
         }
 
-        if (!IsEdit && (selectedIds.Count < 1 || selectedIds.Count > MaxCourses))
+        var courseIds = selectedIds?.ToList() ?? new List<int>();
+        if (!IsEdit && (courseIds.Count < 1 || courseIds.Count > MaxCourses))
         {
-            error = $"Select between 1 and {MaxCourses} courses.";
+            Notifications.Warning($"Select between 1 and {MaxCourses} courses.");
             return;
         }
 
@@ -268,17 +292,22 @@ else
             {
                 var result = await Api.UpdateStudentAsync(Id!.Value, model);
                 if (result.Success)
-                    message = "Student saved.";
+                    Notifications.Success("Student saved.");
                 else
-                    error = result.Error;
+                    Notifications.Error(result.Error ?? "Could not save the student.");
             }
             else
             {
-                var result = await Api.CreateStudentAsync(model, selectedIds);
+                var result = await Api.CreateStudentAsync(model, courseIds);
                 if (result.Success)
-                    Nav.NavigateTo($"students/{result.Value!.Id}");   // go to the edit route of the new student
+                {
+                    Notifications.Success("Student created.");
+                    Nav.NavigateTo($"students/{result.Value!.Id}");   // continue on the edit route of the new student
+                }
                 else
-                    error = result.Error;
+                {
+                    Notifications.Error(result.Error ?? "Could not create the student.");
+                }
             }
         }
         finally
@@ -289,34 +318,31 @@ else
 
     private async Task EnrollAsync()
     {
-        error = null;
-        message = null;
+        if (selectedCourseId is null)
+            return;
 
-        var result = await Api.EnrollAsync(Id!.Value, selectedCourseId);
+        var result = await Api.EnrollAsync(Id!.Value, selectedCourseId.Value);
         if (!result.Success)
         {
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Could not enroll the student.");
             return;
         }
 
-        selectedCourseId = 0;
-        message = "Enrolled.";
+        selectedCourseId = null;
+        Notifications.Success("Enrolled.");
         await ReloadEnrollmentsAsync();
     }
 
     private async Task ChangeStatusAsync(EnrollmentDto enrollment, EnrollmentStatus status)
     {
-        error = null;
-        message = null;
-
         var result = await Api.ChangeEnrollmentStatusAsync(enrollment.Id, status);
         if (!result.Success)
         {
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Could not change the status.");
             return;
         }
 
-        message = $"{enrollment.CourseCode} is now {status}.";
+        Notifications.Success($"{enrollment.CourseCode} is now {status}.");
         await ReloadEnrollmentsAsync();
     }
 }

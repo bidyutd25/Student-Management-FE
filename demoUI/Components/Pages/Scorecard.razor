@@ -1,95 +1,113 @@
 @page "/scorecard/{StudentId:int?}"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using System.ComponentModel.DataAnnotations;
+@using demoUI.Models;
 @inject EducationApi Api
 @inject NavigationManager Nav
+@inject NotificationService Notifications
 
 <PageTitle>Scorecard</PageTitle>
 
-<h3>Scorecard</h3>
-
-<Alert Message="@error" />
+<RadzenText TextStyle="TextStyle.H4" class="rz-mb-4">Scorecard</RadzenText>
 
 @if (loading)
 {
-    <p>Loading...</p>
+    <RadzenText>Loading...</RadzenText>
 }
 else if (StudentId is null)
 {
-    <p class="text-muted">Choose a student to see their scorecard.</p>
+    <RadzenText TextStyle="TextStyle.Body1" class="rz-mb-2">Choose a student to see their scorecard.</RadzenText>
 
-    <div style="max-width:420px">
-        <select class="form-select" @onchange="OnStudentSelected">
-            <option value="0">Select a student...</option>
-            @foreach (var s in students)
-            {
-                <option value="@s.Id">@s.Name (@s.Email)</option>
-            }
-        </select>
-    </div>
+    <RadzenDropDown TValue="int?"
+                    Data="@students"
+                    TextProperty="Name"
+                    ValueProperty="Id"
+                    AllowFiltering="true"
+                    Placeholder="Select a student..."
+                    Change="@OnStudentSelected"
+                    Style="width:100%;max-width:420px" />
 }
-else if (card is not null)
+else if (card is null)
 {
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-            <h4 class="mb-0">@card.StudentName</h4>
-            <a href="@($"students/{card.StudentId}")">View student</a> |
-            <a href="scorecard">Choose another student</a>
-        </div>
-        <div class="text-end">
-            <div class="text-muted small">Overall (completed courses)</div>
-            <div class="fs-4">@(card.OverallPercentage is null ? "-" : $"{card.OverallPercentage:0.##}%")</div>
-        </div>
-    </div>
+    <RadzenText>This student does not exist.</RadzenText>
+    <RadzenButton Text="Choose another student" ButtonStyle="ButtonStyle.Light"
+                  Click="@(() => Nav.NavigateTo("scorecard"))" />
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Horizontal"
+                 JustifyContent="JustifyContent.SpaceBetween"
+                 AlignItems="AlignItems.Center"
+                 class="rz-mb-4">
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.H5" class="rz-m-0">@card.StudentName</RadzenText>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton Text="View student" Icon="person" Size="ButtonSize.Small"
+                              Click="@(() => Nav.NavigateTo($"students/{card.StudentId}"))" />
+                <RadzenButton Text="Choose another student" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => Nav.NavigateTo("scorecard"))" />
+            </RadzenStack>
+        </RadzenStack>
+        <RadzenStack AlignItems="AlignItems.End" Gap="0">
+            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">Overall (completed courses)</RadzenText>
+            <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">
+                @(card.OverallPercentage is null ? "-" : $"{card.OverallPercentage:0.##}%")
+            </RadzenText>
+        </RadzenStack>
+    </RadzenStack>
 
     @if (card.Courses.Count == 0)
     {
-        <p class="text-muted">This student has no active or completed courses.</p>
+        <RadzenText>This student has no active or completed courses.</RadzenText>
     }
 
     @foreach (var c in card.Courses)
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                    <strong>@c.CourseCode</strong> - @c.CourseTitle
-                    <span class="badge @UiHelpers.StatusBadge(c.Status) ms-2">@c.Status</span>
-                </div>
-                <div>
-                    <span class="me-2">@($"{c.FinalPercentage:0.##}%")</span>
-                    <span class="badge fs-6 @UiHelpers.GradeBadge(c.Grade)">@c.Grade</span>
-                </div>
-            </div>
-            <div class="card-body">
-                @if (c.Assessments.Count == 0)
-                {
-                    <p class="text-muted mb-0">This course has no assessments yet.</p>
-                }
-                else
-                {
-                    <table class="table table-sm align-middle mb-2">
-                        <thead>
-                            <tr>
-                                <th>Assessment</th>
-                                <th>Marks</th>
-                                <th>Weight</th>
-                                <th>Weighted score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var a in c.Assessments)
-                            {
-                                <tr>
-                                    <td>@a.Name</td>
-                                    <td>@(a.MarksObtained is null ? "-" : $"{a.MarksObtained:0.##} / {a.MaxMarks:0.##}")</td>
-                                    <td>@a.Weightage.ToString("0.##")%</td>
-                                    <td>@(a.WeightedScore is null ? "-" : a.WeightedScore.Value.ToString("0.##"))</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-                <a class="btn btn-sm btn-outline-primary" href="@($"scores/{c.EnrollmentId}")">Enter or edit scores</a>
-            </div>
-        </div>
+        <RadzenCard class="rz-mb-4">
+            <RadzenStack Orientation="Orientation.Horizontal"
+                         JustifyContent="JustifyContent.SpaceBetween"
+                         AlignItems="AlignItems.Center"
+                         class="rz-mb-2">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">@c.CourseCode - @c.CourseTitle</RadzenText>
+                    <RadzenBadge BadgeStyle="@UiHelpers.StatusBadge(c.Status)" Text="@c.Status.ToString()" />
+                </RadzenStack>
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">@($"{c.FinalPercentage:0.##}%")</RadzenText>
+                    <RadzenBadge BadgeStyle="@UiHelpers.GradeBadge(c.Grade)" Text="@c.Grade" />
+                </RadzenStack>
+            </RadzenStack>
+
+            <RadzenDataGrid TItem="AssessmentResultDto" Data="@c.Assessments" AllowPaging="false" AllowSorting="false">
+                <EmptyTemplate>
+                    <RadzenText>This course has no assessments yet.</RadzenText>
+                </EmptyTemplate>
+                <Columns>
+                    <RadzenDataGridColumn TItem="AssessmentResultDto" Property="Name" Title="Assessment" />
+
+                    <RadzenDataGridColumn TItem="AssessmentResultDto" Title="Marks" Width="160px">
+                        <Template Context="a">
+                            @(a.MarksObtained is null ? "-" : $"{a.MarksObtained:0.##} / {a.MaxMarks:0.##}")
+                        </Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="AssessmentResultDto" Title="Weight" Width="110px">
+                        <Template Context="a">@($"{a.Weightage:0.##}%")</Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="AssessmentResultDto" Title="Weighted score" Width="160px">
+                        <Template Context="a">
+                            @(a.WeightedScore is null ? "-" : a.WeightedScore.Value.ToString("0.##"))
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+
+            <RadzenButton Text="Enter or edit scores" Icon="edit_note" Size="ButtonSize.Small" class="rz-mt-3"
+                          Click="@(() => Nav.NavigateTo($"scores/{c.EnrollmentId}"))" />
+        </RadzenCard>
     }
 }
 
@@ -100,20 +118,19 @@ else if (card is not null)
     private StudentScorecardDto? card;
     private List<StudentDto> students = new();
     private bool loading;
-    private string? error;
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
-        error = null;
         card = null;
 
         if (StudentId is null)
         {
             var result = await Api.GetStudentsAsync(null, 1, 100, "Name", "asc");
-            students = result.Success ? result.Value!.Data : new List<StudentDto>();
-            if (!result.Success)
-                error = result.Error;
+            if (result.Success)
+                students = result.Value!.Data;
+            else
+                Notifications.Error(result.Error ?? "Could not load students.");
         }
         else
         {
@@ -121,15 +138,15 @@ else if (card is not null)
             if (result.Success)
                 card = result.Value;
             else
-                error = result.Error;
+                Notifications.Error(result.Error ?? "Could not load the scorecard.");
         }
 
         loading = false;
     }
 
-    private void OnStudentSelected(ChangeEventArgs e)
+    private void OnStudentSelected(object value)
     {
-        if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
+        if (value is int id && id > 0)
             Nav.NavigateTo($"scorecard/{id}");
     }
 }

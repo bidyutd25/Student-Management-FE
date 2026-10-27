@@ -1,93 +1,123 @@
 @page "/courses/{CourseId:int}/assessments"
+@rendermode InteractiveServer
+@using Radzen
+@using Radzen.Blazor
+@using demoUI.Models;
+@using System.ComponentModel.DataAnnotations;
 @inject EducationApi Api
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notifications
 @inject IJSRuntime JS
+
 
 <PageTitle>Assessments</PageTitle>
 
-<h3>Assessments @(course is null ? "" : $"- {course.Code} {course.Title}")</h3>
-<a href="courses">&larr; Back to courses</a>
-
-<Alert Message="@error" />
-<Alert Message="@message" Kind="success" />
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" class="rz-mb-4">
+    <RadzenButton Icon="arrow_back" Text="Courses" ButtonStyle="ButtonStyle.Light"
+                  Click="@(() => Nav.NavigateTo("courses"))" />
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">
+        Assessments @(course is null ? "" : $"- {course.Code} {course.Title}")
+    </RadzenText>
+</RadzenStack>
 
 @if (loading)
 {
-    <p class="mt-3">Loading...</p>
+    <RadzenText>Loading...</RadzenText>
 }
 else if (course is null)
 {
-    <p class="mt-3 text-muted">This course does not exist.</p>
+    <RadzenText>This course does not exist.</RadzenText>
 }
 else
 {
-    <p class="mt-3">
-        Weightage used: <strong>@used.ToString("0.##")</strong> of 100
-        (remaining: <strong>@remaining.ToString("0.##")</strong>).
-        <span class="text-muted">The weightages should add up to 100 for a student to be able to reach 100%.</span>
-    </p>
+    <RadzenCard class="rz-mb-4">
+        <RadzenStack Gap="0.5rem">
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-m-0">
+                Weightage used: <strong>@used.ToString("0.##")</strong> of 100
+                (remaining: <strong>@remaining.ToString("0.##")</strong>)
+            </RadzenText>
+            <RadzenProgressBar Value="@((double)used)" Max="100" ShowValue="true" Unit="% used" />
+            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">
+                The weightages should add up to 100 for a student to be able to reach 100%.
+            </RadzenText>
+        </RadzenStack>
+    </RadzenCard>
 
-    @if (assessments.Count == 0)
-    {
-        <p class="text-muted">No assessments defined yet.</p>
-    }
-    else
-    {
-        <table class="table table-striped align-middle">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Max marks</th>
-                    <th>Weightage (%)</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var a in assessments)
+    <RadzenDataGrid TItem="AssessmentDto" Data="@assessments" AllowPaging="false" AllowSorting="false">
+        <EmptyTemplate>
+            <RadzenText>No assessments defined yet.</RadzenText>
+        </EmptyTemplate>
+        <Columns>
+            <RadzenDataGridColumn TItem="AssessmentDto" Property="Name" Title="Name" />
+
+            <RadzenDataGridColumn TItem="AssessmentDto" Title="Max marks" Width="140px">
+                <Template Context="a">@a.MaxMarks.ToString("0.##")</Template>
+            </RadzenDataGridColumn>
+
+            <RadzenDataGridColumn TItem="AssessmentDto" Title="Weightage (%)" Width="160px">
+                <Template Context="a">@a.Weightage.ToString("0.##")</Template>
+            </RadzenDataGridColumn>
+
+            <RadzenDataGridColumn TItem="AssessmentDto" Title="Actions" Width="140px" TextAlign="TextAlign.Center">
+                <Template Context="a">
+                    <RadzenButton Icon="edit" Size="ButtonSize.Small" title="Edit"
+                                  Click="@(() => StartEdit(a))" />
+                    <RadzenButton Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                  Click="@(() => DeleteAsync(a))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+
+    <RadzenText TextStyle="TextStyle.H5" class="rz-mt-6">
+        @(editingId is null ? "Add assessment" : "Edit assessment")
+    </RadzenText>
+
+    <RadzenTemplateForm TItem="AssessmentFormModel" Data="@form" Submit="@SaveAsync" Style="max-width:560px">
+        <RadzenStack Gap="1rem">
+
+            <RadzenStack Gap="0.25rem">
+                <RadzenLabel Text="Name" Component="AssessmentName" />
+                <RadzenTextBox Name="AssessmentName" @bind-Value="form.Name"
+                               Placeholder="Midterm, Final, Quiz 1..." Style="width:100%" />
+                <RadzenRequiredValidator Component="AssessmentName" Text="Name is required" />
+                <RadzenLengthValidator Component="AssessmentName" Min="2" Max="80"
+                                       Text="Name must be 2 to 80 characters" />
+            </RadzenStack>
+
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="6">
+                    <RadzenStack Gap="0.25rem">
+                        <RadzenLabel Text="Max marks" Component="AssessmentMax" />
+                        <RadzenNumeric Name="AssessmentMax" TValue="decimal" @bind-Value="form.MaxMarks"
+                                       Style="width:100%" />
+                        <RadzenNumericRangeValidator Component="AssessmentMax" Min="@(0.01m)" Max="@(10000m)"
+                                                     Text="Max marks must be greater than 0" />
+                    </RadzenStack>
+                </RadzenColumn>
+                <RadzenColumn Size="6">
+                    <RadzenStack Gap="0.25rem">
+                        <RadzenLabel Text="Weightage (%)" Component="AssessmentWeight" />
+                        <RadzenNumeric Name="AssessmentWeight" TValue="decimal" @bind-Value="form.Weightage"
+                                       Style="width:100%" />
+                        <RadzenNumericRangeValidator Component="AssessmentWeight" Min="@(0.01m)" Max="@(100m)"
+                                                     Text="Weightage must be between 0.01 and 100" />
+                    </RadzenStack>
+                </RadzenColumn>
+            </RadzenRow>
+
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                <RadzenButton ButtonType="ButtonType.Submit" Icon="save" Disabled="@saving"
+                              Text="@(editingId is null ? "Add" : "Save changes")" />
+                @if (editingId is not null)
                 {
-                    <tr class="@(editingId == a.Id ? "table-warning" : "")">
-                        <td>@a.Name</td>
-                        <td>@a.MaxMarks.ToString("0.##")</td>
-                        <td>@a.Weightage.ToString("0.##")</td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary" type="button" @onclick="() => StartEdit(a)">Edit</button>
-                            <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => DeleteAsync(a)">Delete</button>
-                        </td>
-                    </tr>
+                    <RadzenButton ButtonType="ButtonType.Button" Text="Cancel edit" ButtonStyle="ButtonStyle.Light"
+                                  Click="ResetForm" />
                 }
-            </tbody>
-        </table>
-    }
-
-    <h5 class="mt-4">@(editingId is null ? "Add assessment" : "Edit assessment")</h5>
-
-    <EditForm Model="form" OnValidSubmit="SaveAsync" style="max-width:560px">
-        <DataAnnotationsValidator />
-
-        <div class="mb-3">
-            <label class="form-label" for="aname">Name</label>
-            <InputText id="aname" class="form-control" @bind-Value="form.Name" placeholder="Midterm, Final, Quiz 1..." />
-            <ValidationMessage For="() => form.Name" />
-        </div>
-
-        <div class="row">
-            <div class="col-6 mb-3">
-                <label class="form-label" for="amax">Max marks</label>
-                <InputNumber id="amax" class="form-control" @bind-Value="form.MaxMarks" />
-                <ValidationMessage For="() => form.MaxMarks" />
-            </div>
-            <div class="col-6 mb-3">
-                <label class="form-label" for="aweight">Weightage (%)</label>
-                <InputNumber id="aweight" class="form-control" @bind-Value="form.Weightage" />
-                <ValidationMessage For="() => form.Weightage" />
-            </div>
-        </div>
-
-        <button class="btn btn-primary" type="submit" disabled="@saving">@(editingId is null ? "Add" : "Save changes")</button>
-        @if (editingId is not null)
-        {
-            <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">Cancel edit</button>
-        }
-    </EditForm>
+            </RadzenStack>
+        </RadzenStack>
+    </RadzenTemplateForm>
 }
 
 @code {
@@ -96,13 +126,11 @@ else
 
     private CourseDto? course;
     private List<AssessmentDto> assessments = new();
-    private AssessmentFormModel form = new();
+    private AssessmentFormModel form = new() { MaxMarks = 100 };
     private int? editingId;
 
     private bool loading;
     private bool saving;
-    private string? error;
-    private string? message;
 
     private decimal used => assessments.Sum(a => a.Weightage);
     private decimal remaining => 100 - used;
@@ -110,14 +138,12 @@ else
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
-        error = null;
-        message = null;
         ResetForm();
 
         var courseResult = await Api.GetCourseAsync(CourseId);
         course = courseResult.Success ? courseResult.Value : null;
         if (!courseResult.Success)
-            error = courseResult.Error;
+            Notifications.Error(courseResult.Error ?? "Course not found.");
 
         if (course is not null)
             await LoadAssessmentsAsync();
@@ -128,9 +154,10 @@ else
     private async Task LoadAssessmentsAsync()
     {
         var result = await Api.GetAssessmentsAsync(CourseId);
-        assessments = result.Success ? result.Value! : new List<AssessmentDto>();
-        if (!result.Success)
-            error = result.Error;
+        if (result.Success)
+            assessments = result.Value!;
+        else
+            Notifications.Error(result.Error ?? "Could not load assessments.");
     }
 
     private void StartEdit(AssessmentDto assessment)
@@ -142,8 +169,6 @@ else
             MaxMarks = assessment.MaxMarks,
             Weightage = assessment.Weightage
         };
-        error = null;
-        message = null;
     }
 
     private void ResetForm()
@@ -152,25 +177,25 @@ else
         form = new AssessmentFormModel { MaxMarks = 100 };
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync(AssessmentFormModel submitted)
     {
-        error = null;
-        message = null;
         saving = true;
 
         try
         {
+            var wasEditing = editingId is not null;
+
             var result = editingId is null
                 ? await Api.CreateAssessmentAsync(CourseId, form)
                 : await Api.UpdateAssessmentAsync(editingId.Value, form);
 
             if (!result.Success)
             {
-                error = result.Error;
+                Notifications.Error(result.Error ?? "Could not save the assessment.");
                 return;
             }
 
-            message = editingId is null ? "Assessment added." : "Assessment updated.";
+            Notifications.Success(wasEditing ? "Assessment updated." : "Assessment added.");
             ResetForm();
             await LoadAssessmentsAsync();
         }
@@ -182,24 +207,25 @@ else
 
     private async Task DeleteAsync(AssessmentDto assessment)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete assessment {assessment.Name}?");
-        if (!confirmed)
-            return;
+        var confirmed = await Dialog.Confirm(
+            $"Delete assessment {assessment.Name}?",
+            "Delete assessment",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
 
-        error = null;
-        message = null;
+        if (confirmed != true)
+            return;
 
         var result = await Api.DeleteAssessmentAsync(assessment.Id);
         if (!result.Success)
         {
-            error = result.Error;
+            Notifications.Error(result.Error ?? "Could not delete the assessment.");
             return;
         }
 
         if (editingId == assessment.Id)
             ResetForm();
 
-        message = "Assessment deleted.";
+        Notifications.Success("Assessment deleted.");
         await LoadAssessmentsAsync();
     }
 }
