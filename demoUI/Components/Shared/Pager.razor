@@ -1,0 +1,30 @@
+<nav aria-label="Pagination">
+    <ul class="pagination align-items-center">
+        <li class="page-item @(PageNumber <= 1 ? "disabled" : "")">
+            <button class="page-link" type="button" @onclick="() => GoAsync(PageNumber - 1)">Previous</button>
+        </li>
+        <li class="page-item disabled">
+            <span class="page-link">Page @PageNumber of @TotalPages (@TotalCount items)</span>
+        </li>
+        <li class="page-item @(PageNumber >= TotalPages ? "disabled" : "")">
+            <button class="page-link" type="button" @onclick="() => GoAsync(PageNumber + 1)">Next</button>
+        </li>
+    </ul>
+</nav>
+
+@code {
+    [Parameter] public int PageNumber { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = 10;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)Math.Max(1, PageSize)));
+
+    private Task GoAsync(int page)
+    {
+        if (page < 1 || page > TotalPages)
+            return Task.CompletedTask;
+
+        return PageChanged.InvokeAsync(page);
+    }
+}

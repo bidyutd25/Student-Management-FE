@@ -1,0 +1,132 @@
+@page "/courses/new"
+@page "/courses/{Id:int}"
+@inject EducationApi Api
+@inject NavigationManager Nav
+
+<PageTitle>@(IsEdit ? "Edit course" : "New course")</PageTitle>
+
+<h3>@(IsEdit ? "Edit course" : "Add course")</h3>
+<a href="courses">&larr; Back to courses</a>
+
+<Alert Message="@error" />
+
+@if (loading)
+{
+    <p class="mt-3">Loading...</p>
+}
+else if (notFound)
+{
+    <p class="mt-3 text-muted">This course does not exist.</p>
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="SaveAsync" class="mt-3" style="max-width:560px">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label" for="code">Code</label>
+            <InputText id="code" class="form-control" @bind-Value="model.Code" />
+            <ValidationMessage For="() => model.Code" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="title">Title</label>
+            <InputText id="title" class="form-control" @bind-Value="model.Title" />
+            <ValidationMessage For="() => model.Title" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="credits">Credits</label>
+            <InputNumber id="credits" class="form-control" @bind-Value="model.Credits" />
+            <ValidationMessage For="() => model.Credits" />
+        </div>
+
+        <div class="form-check mb-3">
+            <InputCheckbox id="active" class="form-check-input" @bind-Value="model.IsActive" />
+            <label class="form-check-label" for="active">Open for enrollment</label>
+        </div>
+
+        <button class="btn btn-primary" type="submit" disabled="@saving">@(IsEdit ? "Save changes" : "Create course")</button>
+        <a class="btn btn-outline-secondary" href="courses">Cancel</a>
+
+        @if (IsEdit)
+        {
+            <a class="btn btn-outline-info ms-2" href="@($"courses/{Id}/assessments")">Manage assessments</a>
+        }
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+
+    private CourseFormModel model = new();
+    private bool loading;
+    private bool saving;
+    private bool notFound;
+    private string? error;
+
+    private int? loadedId;
+    private bool initialised;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (initialised && loadedId == Id)
+            return;
+
+        initialised = true;
+        loadedId = Id;
+
+        error = null;
+        notFound = false;
+        model = new CourseFormModel();
+
+        if (!IsEdit)
+            return;
+
+        loading = true;
+
+        var result = await Api.GetCourseAsync(Id!.Value);
+        if (result.Success)
+        {
+            var course = result.Value!;
+            model = new CourseFormModel
+            {
+                Code = course.Code,
+                Title = course.Title,
+                Credits = course.Credits,
+                IsActive = course.IsActive
+            };
+        }
+        else
+        {
+            notFound = true;
+            error = result.Error;
+        }
+
+        loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        saving = true;
+
+        try
+        {
+            var result = IsEdit
+                ? await Api.UpdateCourseAsync(Id!.Value, model)
+                : await Api.CreateCourseAsync(model);
+
+            if (result.Success)
+                Nav.NavigateTo("courses");
+            else
+                error = result.Error;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

@@ -1,0 +1,175 @@
+@page "/courses"
+@inject EducationApi Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Courses</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Courses</h3>
+    <a class="btn btn-primary" href="courses/new">Add course</a>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input class="form-control"
+               placeholder="Search by code or title"
+               @bind="searchText"
+               @bind:event="oninput"
+               @onkeydown="OnSearchKeyDown" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @onchange="OnActiveChanged">
+            <option value="" selected="@(Active is null)">All courses</option>
+            <option value="true" selected="@(Active == true)">Open only</option>
+            <option value="false" selected="@(Active == false)">Closed only</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="button" @onclick="ApplySearch">Search</button>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="button" @onclick="ClearFilters">Clear</button>
+    </div>
+</div>
+
+<Alert Message="@error" />
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (courses.Data.Count == 0)
+{
+    <p class="text-muted">No courses found.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Title</th>
+                <th>Credits</th>
+                <th>Status</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in courses.Data)
+            {
+                <tr>
+                    <td>@c.Code</td>
+                    <td>@c.Title</td>
+                    <td>@c.Credits</td>
+                    <td>
+                        <span class="badge @(c.IsActive ? "bg-success" : "bg-secondary")">@(c.IsActive ? "Open" : "Closed")</span>
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="@($"courses/{c.Id}")">Edit</a>
+                        <a class="btn btn-sm btn-outline-info" href="@($"courses/{c.Id}/assessments")">Assessments</a>
+                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => DeleteAsync(c)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <Pager PageNumber="PageNumber"
+           PageSize="PageSize"
+           TotalCount="courses.Pagination.TotalCount"
+           PageChanged="GoToPage" />
+}
+
+@code {
+    private const int PageSize = 10;
+
+    [SupplyParameterFromQuery(Name = "search")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = "active")] public bool? Active { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
+
+    private ApiPage<CourseDto> courses = new();
+    private string searchText = "";
+    private bool loading;
+    private string? error;
+
+    private int PageNumber => PageParam is > 0 ? PageParam.Value : 1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        searchText = Search ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+
+        var result = await Api.GetCoursesAsync(Search, Active, PageNumber, PageSize);
+
+        if (result.Success)
+        {
+            courses = result.Value!;
+        }
+        else
+        {
+            courses = new ApiPage<CourseDto>();
+            error = result.Error;
+        }
+
+        loading = false;
+    }
+
+    private void Navigate(string? search, bool? active, int page)
+    {
+        var uri = Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["search"] = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
+            ["active"] = active,
+            ["page"] = page <= 1 ? null : page
+        });
+
+        Nav.NavigateTo(uri);
+    }
+
+    private void ApplySearch() => Navigate(searchText, Active, 1);
+
+    private void ClearFilters() => Navigate(null, null, 1);
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            ApplySearch();
+    }
+
+    private void OnActiveChanged(ChangeEventArgs e)
+    {
+        bool? active = e.Value?.ToString() switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => null
+        };
+
+        Navigate(Search, active, 1);
+    }
+
+    private void GoToPage(int page) => Navigate(Search, Active, page);
+
+    private async Task DeleteAsync(CourseDto course)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete course {course.Code}?");
+        if (!confirmed)
+            return;
+
+        var result = await Api.DeleteCourseAsync(course.Id);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

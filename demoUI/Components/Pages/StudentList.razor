@@ -1,0 +1,179 @@
+@page "/students"
+@inject EducationApi Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Students</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Students</h3>
+    <a class="btn btn-primary" href="students/new">Add student</a>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-5">
+        <input class="form-control"
+               placeholder="Search by name"
+               @bind="searchText"
+               @bind:event="oninput"
+               @onkeydown="OnSearchKeyDown" />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="button" @onclick="ApplySearch">Search</button>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">Clear</button>
+    </div>
+</div>
+
+<Alert Message="@error" />
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (students.Data.Count == 0)
+{
+    <p class="text-muted">No students found.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th role="button" @onclick='() => SortBy("Id")'>ID @SortIcon("Id")</th>
+                <th role="button" @onclick='() => SortBy("Name")'>Name @SortIcon("Name")</th>
+                <th role="button" @onclick='() => SortBy("Email")'>Email @SortIcon("Email")</th>
+                <th>Age</th>
+                <th>Active courses</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in students.Data)
+            {
+                <tr>
+                    <td>@s.Id</td>
+                    <td>@s.Name</td>
+                    <td>@s.Email</td>
+                    <td>@(s.Age?.ToString() ?? "-")</td>
+                    <td>@s.ActiveCourses</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="@($"students/{s.Id}")">Edit</a>
+                        <a class="btn btn-sm btn-outline-success" href="@($"scorecard/{s.Id}")">Scorecard</a>
+                        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => DeleteAsync(s)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <Pager PageNumber="PageNumber"
+           PageSize="PageSize"
+           TotalCount="students.Pagination.TotalCount"
+           PageChanged="GoToPage" />
+}
+
+@code {
+    private const int PageSize = 10;
+
+    // Search, page and sort live in the URL: /students?search=ram&page=2&sort=Name&order=desc
+    // so the browser back button and bookmarks keep working.
+    [SupplyParameterFromQuery(Name = "search")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? PageParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    [SupplyParameterFromQuery(Name = "order")] public string? Order { get; set; }
+
+    private ApiPage<StudentDto> students = new();
+    private string searchText = "";
+    private bool loading;
+    private string? error;
+
+    private int PageNumber => PageParam is > 0 ? PageParam.Value : 1;
+    private string CurrentSort => string.IsNullOrWhiteSpace(Sort) ? "Id" : Sort;
+    private string CurrentOrder => string.Equals(Order, "desc", StringComparison.OrdinalIgnoreCase) ? "desc" : "asc";
+
+    // Runs on the first visit and again whenever the query string changes
+    protected override async Task OnParametersSetAsync()
+    {
+        searchText = Search ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+
+        var result = await Api.GetStudentsAsync(Search, PageNumber, PageSize, CurrentSort, CurrentOrder);
+
+        if (result.Success)
+        {
+            students = result.Value!;
+        }
+        else
+        {
+            students = new ApiPage<StudentDto>();
+            error = result.Error;
+        }
+
+        loading = false;
+    }
+
+    private void Navigate(string? search, int page, string sort, string order)
+    {
+        var uri = Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["search"] = string.IsNullOrWhiteSpace(search) ? null : search.Trim(),
+            ["page"] = page <= 1 ? null : page,
+            ["sort"] = sort == "Id" ? null : sort,
+            ["order"] = order == "asc" ? null : order
+        });
+
+        Nav.NavigateTo(uri);
+    }
+
+    private void ApplySearch() => Navigate(searchText, 1, CurrentSort, CurrentOrder);
+
+    private void ClearSearch() => Navigate(null, 1, CurrentSort, CurrentOrder);
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            ApplySearch();
+    }
+
+    private void GoToPage(int page) => Navigate(Search, page, CurrentSort, CurrentOrder);
+
+    private void SortBy(string column)
+    {
+        var order = CurrentSort.Equals(column, StringComparison.OrdinalIgnoreCase) && CurrentOrder == "asc"
+            ? "desc"
+            : "asc";
+
+        Navigate(Search, 1, column, order);
+    }
+
+    private string SortIcon(string column) =>
+        CurrentSort.Equals(column, StringComparison.OrdinalIgnoreCase)
+            ? (CurrentOrder == "desc" ? "▼" : "▲")
+            : "";
+
+    private async Task DeleteAsync(StudentDto student)
+    {
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm", $"Delete {student.Name} together with their enrollments and scores?");
+
+        if (!confirmed)
+            return;
+
+        var result = await Api.DeleteStudentAsync(student.Id);
+        if (!result.Success)
+        {
+            error = result.Error;
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

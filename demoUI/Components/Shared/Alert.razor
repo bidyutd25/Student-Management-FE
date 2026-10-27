@@ -1,0 +1,11 @@
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <div class="alert alert-@Kind py-2" role="alert">@Message</div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+
+    // Bootstrap alert kind: danger, success, warning, info
+    [Parameter] public string Kind { get; set; } = "danger";
+}
