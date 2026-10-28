@@ -1,0 +1,30 @@
+﻿body {
+    background-color: var(--rz-base-background-color, #ffffff);
+    color: var(--rz-text-color, #212529);
+}
+
+.top-row {
+    background-color: var(--rz-base-200, #f7f7f7) !important;
+    border-bottom-color: var(--rz-base-300, #d6d5d5) !important;
+}
+
+    .top-row a, .top-row .btn-link {
+        color: var(--rz-primary, #0b5ed7);
+    }
+
+.legend {
+    flex-wrap: wrap;
+}
+
+.score-chip {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--rz-base-400, #adb5bd);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.score-chip-strike {
+    text-decoration: line-through;
+}

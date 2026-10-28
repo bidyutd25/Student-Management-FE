@@ -34,6 +34,7 @@ public class StudentDto
     public DateOnly? DateOfBirth { get; set; }
     public int? Age { get; set; }
     public int ActiveCourses { get; set; }
+    public decimal? OverallPercentage { get; set; }
 }
 
 public class CourseDto
@@ -124,8 +125,12 @@ public class StudentFormModel
 {
     public const string EmailPattern = @"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$";
 
+    public const string NamePattern = @"^(?=(?:.*?\p{L}){3})\p{L}+(?: \p{L}+)*$";
+    public const int MinimumAge = 16;
+
     [Required(ErrorMessage = "Name is required.")]
-    [StringLength(100, MinimumLength = 2, ErrorMessage = "Name must be 2 to 100 characters.")]
+    [StringLength(100, MinimumLength = 3, ErrorMessage = "Name must be at least 3 characters long.")]
+    [RegularExpression(NamePattern, ErrorMessage = "Name can contain only letters and single spaces.")]
     public string Name { get; set; } = "";
 
     [Required(ErrorMessage = "Email is required.")]
@@ -158,7 +163,7 @@ public class AssessmentFormModel
     [StringLength(80, MinimumLength = 2, ErrorMessage = "Name must be 2 to 80 characters.")]
     public string Name { get; set; } = "";
 
-    [Range(0.01, 10000, ErrorMessage = "Max marks must be greater than 0.")]
+    [Range(1, 100, ErrorMessage = "Max marks must be greater than 0.")]
     public decimal MaxMarks { get; set; } = 100;
 
     [Range(0.01, 100, ErrorMessage = "Weightage must be between 0.01 and 100.")]

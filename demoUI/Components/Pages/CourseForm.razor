@@ -129,6 +129,11 @@ else
 
     private async Task SaveAsync(CourseFormModel submitted)
     {
+        if (string.Equals(model.Code.Trim(), model.Title.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            Notifications.Warning("Course code and title cannot be the same.");
+            return;
+        }
         saving = true;
 
         try

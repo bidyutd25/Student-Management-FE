@@ -12,8 +12,4 @@
     <PackageReference Include="Radzen.Blazor" Version="12.1.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Components\Model\" />
-  </ItemGroup>
-
 </Project>

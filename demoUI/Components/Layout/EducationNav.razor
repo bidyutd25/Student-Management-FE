@@ -1,9 +1,17 @@
 @using Radzen
 @using Radzen.Blazor
 
-<RadzenMenu class="rz-mb-4">
-    <RadzenMenuItem Text="Home" Icon="home" Path="/" />
-    <RadzenMenuItem Text="Students" Icon="school" Path="/students" />
-    <RadzenMenuItem Text="Courses" Icon="menu_book" Path="/courses" />
-    <RadzenMenuItem Text="Scorecards" Icon="grading" Path="/scorecard" />
-</RadzenMenu>
+<RadzenStack Orientation="Orientation.Horizontal"
+             JustifyContent="JustifyContent.SpaceBetween"
+             AlignItems="AlignItems.Center"
+             Gap="1rem"
+             class="rz-mb-4">
+    <RadzenMenu Style="flex:1">
+        <RadzenMenuItem Text="Home" Icon="home" Path="/" />
+        <RadzenMenuItem Text="Students" Icon="school" Path="/students" />
+        <RadzenMenuItem Text="Courses" Icon="menu_book" Path="/courses" />
+        <RadzenMenuItem Text="Scorecards" Icon="grading" Path="/scorecard" />
+    </RadzenMenu>
+
+    <RadzenAppearanceToggle />
+</RadzenStack>

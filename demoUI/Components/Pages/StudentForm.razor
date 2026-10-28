@@ -34,8 +34,11 @@ else
                 <RadzenLabel Text="Name" Component="StudentName" />
                 <RadzenTextBox Name="StudentName" @bind-Value="model.Name" Style="width:100%" />
                 <RadzenRequiredValidator Component="StudentName" Text="Name is required" />
-                <RadzenLengthValidator Component="StudentName" Min="2" Max="100"
-                                       Text="Name must be 2 to 100 characters" />
+                <RadzenLengthValidator Component="StudentName" Min="3" Max="100"
+                                       Text="Name must be at least 3 characters long" />
+                <RadzenRegexValidator Component="StudentName"
+                                      Pattern="@StudentFormModel.NamePattern"
+                                      Text="Name can contain only letters and single spaces" />
             </RadzenStack>
 
             <RadzenStack Gap="0.25rem">
@@ -51,6 +54,8 @@ else
                 <RadzenLabel Text="Date of birth" Component="StudentDob" />
                 <RadzenDatePicker Name="StudentDob" TValue="DateTime?" @bind-Value="dateOfBirth"
                                   DateFormat="dd MMM yyyy" Style="width:100%" />
+                <RadzenRequiredValidator Component="StudentDob" Text="Date of birth is required" />
+                <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">The student must be older than 15.</RadzenText>
             </RadzenStack>
 
             @if (!IsEdit)
@@ -272,9 +277,26 @@ else
     {
         model.DateOfBirth = dateOfBirth is null ? null : DateOnly.FromDateTime(dateOfBirth.Value);
 
-        if (model.DateOfBirth is { } dob && dob > DateOnly.FromDateTime(DateTime.Today))
+                if (model.DateOfBirth is not { } dob)
+        {
+            Notifications.Warning("Date of birth is required.");
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (dob > today)
         {
             Notifications.Warning("Date of birth cannot be in the future.");
+            return;
+        }
+
+        var age = today.Year - dob.Year;
+        if (dob > today.AddYears(-age))
+            age--;
+
+        if (age < StudentFormModel.MinimumAge)
+        {
+            Notifications.Warning("Student age must be greater than 15.");
             return;
         }
 

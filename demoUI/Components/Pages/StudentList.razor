@@ -24,11 +24,24 @@
                   Click="@(() => Nav.NavigateTo("students/new"))" />
 </RadzenStack>
 
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-3 legend">
+    <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">Overall score:</RadzenText>
+    @foreach (var band in ScoreBands.All)
+    {
+        <span class="score-chip @(band.StrikeThrough ? "score-chip-strike" : "")"
+              style="@($"background-color:{ScoreBands.Tint(band)};border-color:{band.Color}")">
+            @band.Label
+        </span>
+    }
+    <span class="score-chip" style="border-style:dashed">No fully scored course yet</span>
+</RadzenStack>
+
 <RadzenDataGrid @ref="grid"
                 TItem="StudentDto"
                 Data="@students"
                 Count="@totalCount"
                 LoadData="@LoadData"
+                CellRender="@CellRender"
                 IsLoading="@isLoading"
                 AllowPaging="true"
                 PageSize="10"
@@ -52,6 +65,10 @@
 
         <RadzenDataGridColumn TItem="StudentDto" Property="ActiveCourses" Title="Active courses" Width="140px"
                               Sortable="false" Filterable="false" />
+        <RadzenDataGridColumn TItem="StudentDto" Property="OverallPercentage" Title="Overall score" Width="140px"
+                              Sortable="false" Filterable="false">
+            <Template Context="s">@(s.OverallPercentage is null ? "-" : $"{s.OverallPercentage:0.##}%")</Template>
+        </RadzenDataGridColumn>
 
         <RadzenDataGridColumn TItem="StudentDto" Title="Actions" Width="190px"
                               Sortable="false" Filterable="false" TextAlign="TextAlign.Center">
@@ -144,5 +161,19 @@
 
         Notifications.Success("Student deleted.");
         await grid.Reload();
+    }
+
+    private void CellRender(DataGridCellRenderEventArgs<StudentDto> args)
+    {
+        var band = ScoreBands.For(args.Data.OverallPercentage);
+        if (band is null)
+            return;
+
+        var style = $"background-color:{ScoreBands.Tint(band)};";
+
+        if (band.StrikeThrough && args.Column.Property is "Name" or "Email")
+            style += "text-decoration:line-through;";
+
+        args.Attributes.Add("style", style);
     }
 }

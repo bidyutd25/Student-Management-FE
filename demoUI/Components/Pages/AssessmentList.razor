@@ -92,8 +92,8 @@ else
                         <RadzenLabel Text="Max marks" Component="AssessmentMax" />
                         <RadzenNumeric Name="AssessmentMax" TValue="decimal" @bind-Value="form.MaxMarks"
                                        Style="width:100%" />
-                        <RadzenNumericRangeValidator Component="AssessmentMax" Min="@(0.01m)" Max="@(10000m)"
-                                                     Text="Max marks must be greater than 0" />
+                        <RadzenNumericRangeValidator Component="AssessmentMax" Min="@(0m)" Max="@(100m)"
+                                Text="Max marks must be between 0 and 100" />
                     </RadzenStack>
                 </RadzenColumn>
                 <RadzenColumn Size="6">
